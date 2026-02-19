@@ -419,7 +419,7 @@ class SampleWithFeatures(SampleData):
             voxel_size = np.concatenate((voxel_size, np.array([0])), axis=0)
         offset = bb[:, 0]
         feature_data_bin = (feature_map == feature_id).astype(np.uint8)
-        local_com = ndimage.measurements.center_of_mass(feature_data_bin)
+        local_com = ndimage.center_of_mass(feature_data_bin)
         local_com += np.array([0.5, 0.5, 0.5])  # account for first voxel coordinates
         com = voxel_size * (offset + local_com
                             - 0.5 * np.array(self.get_feature_map().shape))
@@ -432,7 +432,9 @@ class SampleWithFeatures(SampleData):
         :param bool as_slice: a flag to return the feature bounding box as a slice.
         :return: the bounding box coordinates.
         """
-        slices = ndimage.find_objects(self.get_feature_map() == np.array(feature_id))[0]
+        # `find_objects` expects integer labels, not a boolean mask.
+        label_mask = (self.get_feature_map() == feature_id).astype(np.uint8)
+        slices = ndimage.find_objects(label_mask)[0]
         if as_slice:
             return slices
         x_indices = (slices[0].start, slices[0].stop)

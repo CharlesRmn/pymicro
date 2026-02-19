@@ -958,8 +958,8 @@ class OimScan:
         :param str file_name: name of the output file.
         """
         f = h5py.File('%s.h5' % file_name, 'w')
-        f.attrs[' Manufacturer'] = np.string_('EDAX')
-        f.attrs[' Version'] = np.string_('OIM Analysis 7.3.0 x64  [09-01-15]')
+        f.attrs[' Manufacturer'] = np.bytes_('EDAX')
+        f.attrs[' Version'] = np.bytes_('OIM Analysis 7.3.0 x64  [09-01-15]')
         # create the group containing the data
         data_container = f.create_group('DataContainer')
         ebsd = data_container.create_group('EBSD')

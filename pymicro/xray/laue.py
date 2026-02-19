@@ -1040,7 +1040,7 @@ class LaueForwardSimulation(ForwardSimulation):
                                                              self.omega)
         origins = np.repeat(positions, len(hkl_planes), axis=0)
         OR_vectors = detector.project_along_directions(K_vectors, origins)
-        uv = detector.lab_to_pixel(OR_vectors).astype(np.int)
+        uv = detector.lab_to_pixel(OR_vectors).astype(int)
         # look at which hkl plane diffracts on the detector within the given margin
         on_det = np.where((-margin < uv[:, 0]) &
                           (uv[:, 0] < detector.get_size_px()[0] + margin) &
@@ -1095,7 +1095,7 @@ class LaueForwardSimulation(ForwardSimulation):
         # with diffraction informations, project them on the detector
         origins = np.repeat(positions, n_hkl, axis=0)
         OR_vectors = detector.project_along_directions(K_vectors, origins)
-        uv = detector.lab_to_pixel(OR_vectors).astype(np.int)
+        uv = detector.lab_to_pixel(OR_vectors).astype(int)
 
         # now construct a boolean list to select the diffraction spots
         # FIXME handle case when min and max energies not set

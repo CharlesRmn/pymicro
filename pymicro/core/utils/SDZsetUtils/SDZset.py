@@ -992,9 +992,9 @@ class SDZset():
                 parent_grid = self.data.get_attribute('parent_grid_path',
                                                       SD_field)
                 if self.data._is_image(parent_grid) and (len(field.shape) == 3):
-                    field = field.reshape((np.product(field.shape[:]),1))
+                    field = field.reshape((np.prod(field.shape[:]),1))
                 else:
-                    field = field.reshape((np.product(field.shape[0:-1]),
+                    field = field.reshape((np.prod(field.shape[0:-1]),
                                            field.shape[-1]))
                 # loop over all components of the field
                 for k in range(field.shape[-1]):

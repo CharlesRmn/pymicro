@@ -190,7 +190,7 @@ class View_slice:
         sizes = np.zeros(len(gids), dtype='f')
         for i, gid in enumerate(gids):
             sizes[i] = np.sum(grains_slice == gid)
-            centers[i] = ndimage.measurements.center_of_mass(
+            centers[i] = ndimage.center_of_mass(
                 grains_slice == gid, grains_slice)
         if self.unit == 'mm':
             centers += np.array([-0.5 * grains_slice.shape[0],

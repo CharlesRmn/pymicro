@@ -16,6 +16,7 @@ import os
 import vtk
 import h5py
 import math
+from typing import cast
 from pathlib import Path
 from scipy import ndimage
 from matplotlib import pyplot as plt, colors
@@ -1664,7 +1665,7 @@ class Grain:
         from vtk.util import numpy_support
         grain_size = np.shape(array)
         array_bin = (array == label).astype(np.uint8)
-        local_com = ndimage.measurements.center_of_mass(array_bin, array)
+        local_com = ndimage.center_of_mass(array_bin, array)
         vtk_data_array = numpy_support.numpy_to_vtk(np.ravel(array_bin, order='F'), deep=1)
         grid = vtk.vtkUniformGrid()
         grid.SetOrigin(-local_com[0], -local_com[1], -local_com[2])
@@ -1778,8 +1779,10 @@ class Grain:
             with h5py.File(grain_map_path, 'r') as f:
                 # because how matlab writes the data, we need to swap X and Z axes in the DCT volume
                 vol = f['vol'].value.transpose(2, 1, 0)
-                grain_data = vol[ndimage.find_objects(vol == label)[0]]
-                g.volume = ndimage.measurements.sum(vol == label)
+                # `find_objects` expects integer labels; convert boolean mask to uint8.
+                label_mask = (vol == label).astype(np.uint8)
+                grain_data = vol[ndimage.find_objects(label_mask, max_label=1)[0]]
+                g.volume = ndimage.sum(vol == label)
                 # create the vtk representation of the grain
                 g.add_vtk_mesh(grain_data, contour=False)
         return g
@@ -1852,7 +1855,10 @@ class Microstructure(SampleData):
 
     def _after_file_open(self, phase_list=None, **kwargs):
         """Initialization code to run after opening a Sample Data file."""
-        self.grains = self.get_node('GrainDataTable')
+        grains = self.get_node('GrainDataTable')
+        if grains is None:
+            raise RuntimeError('could not find GrainDataTable in dataset')
+        self.grains = cast(tables.Table, grains)
         self.default_compression_options = {'complib': 'zlib', 'complevel': 5}
         if self._file_exist:
             self.active_grain_map = self.get_attribute('active_grain_map',
@@ -3421,7 +3427,7 @@ class Microstructure(SampleData):
         :return: the dilated array.
         """
         if struct is None:
-            struct = ndimage.morphology.generate_binary_structure(array.ndim, 1)
+            struct = ndimage.generate_binary_structure(array.ndim, 1)
         assert struct.ndim == array.ndim
         # carry out dilation in iterative steps
         step = 0
@@ -3430,8 +3436,8 @@ class Microstructure(SampleData):
                 grains = np.isin(array, dilation_ids)
             else:
                 grains = (array > 0).astype(np.uint8)
-            grains_dil = ndimage.morphology.binary_dilation(grains,
-                                                            structure=struct).astype(np.uint8)
+            grains_dil = ndimage.binary_dilation(grains,
+                                                 structure=struct).astype(np.uint8)
             if mask is not None:
                 # only dilate within the mask
                 grains_dil *= mask.astype(np.uint8)
@@ -3820,7 +3826,7 @@ class Microstructure(SampleData):
             voxel_size = np.concatenate((voxel_size, np.array([0])), axis=0)
         offset = bb[:, 0]
         grain_data_bin = (grain_map == gid).astype(np.uint8)
-        local_com = ndimage.measurements.center_of_mass(grain_data_bin) + \
+        local_com = ndimage.center_of_mass(grain_data_bin) + \
                     np.array([0.5, 0.5, 0.5])  # account for first voxel coordinates
         com = voxel_size * (offset + local_com
                             - 0.5 * np.array(self.get_grain_map().shape))
@@ -3833,7 +3839,9 @@ class Microstructure(SampleData):
         :param bool as_slice: a flag to return the grain bounding box as a slice.
         :return: the bounding box coordinates.
         """
-        slices = ndimage.find_objects(self.get_grain_map() == np.array(gid))[0]
+        # `find_objects` expects integer labels, not a boolean mask.
+        label_mask = (self.get_grain_map() == gid).astype(np.uint8)
+        slices = ndimage.find_objects(label_mask)[0]
         if as_slice:
             return slices
         x_indices = (slices[0].start, slices[0].stop)
@@ -3889,7 +3897,7 @@ class Microstructure(SampleData):
         surface_areas = np.empty_like(volumes)
         for i, grain_id in enumerate(id_list):
             grain_data = (grain_map == grain_id)
-            surface_areas[i] = np.sum(grain_data - ndimage.morphology.binary_erosion(grain_data))
+            surface_areas[i] = np.sum(grain_data - ndimage.binary_erosion(grain_data))
         sphericities = np.pi ** (1 / 3) * (6 * volumes) ** (2 / 3) / surface_areas
         return sphericities
 
@@ -4758,8 +4766,8 @@ class Microstructure(SampleData):
         """Write the microstructure as a hdf5 file compatible with DREAM3D."""
         import time
         f = h5py.File('%s.h5' % self.get_sample_name(), 'w')
-        f.attrs['FileVersion'] = np.string_('7.0')
-        f.attrs['DREAM3D Version'] = np.string_('6.1.77.d28a796')
+        f.attrs['FileVersion'] = np.bytes_('7.0')
+        f.attrs['DREAM3D Version'] = np.bytes_('6.1.77.d28a796')
         f.attrs['HDF5_Version'] = h5py.version.hdf5_version
         f.attrs['h5py_version'] = h5py.version.version
         f.attrs['file_time'] = time.time()
@@ -4778,16 +4786,16 @@ class Microstructure(SampleData):
                                                           dtype=np.uint32))
         cryst_structure.attrs['ComponentDimensions'] = np.uint64(1)
         cryst_structure.attrs['DataArrayVersion'] = np.int32(2)
-        cryst_structure.attrs['ObjectType'] = np.string_('DataArray<uint32_t>')
-        cryst_structure.attrs['Tuple Axis Dimensions'] = np.string_('x=2')
+        cryst_structure.attrs['ObjectType'] = np.bytes_('DataArray<uint32_t>')
+        cryst_structure.attrs['Tuple Axis Dimensions'] = np.bytes_('x=2')
         cryst_structure.attrs['TupleDimensions'] = np.uint64(2)
         mat_name = ed.create_dataset('MaterialName',
                                      data=[a.encode('utf8')
                                            for a in ['Invalid Phase', 'Unknown']])
         mat_name.attrs['ComponentDimensions'] = np.uint64(1)
         mat_name.attrs['DataArrayVersion'] = np.int32(2)
-        mat_name.attrs['ObjectType'] = np.string_('StringDataArray')
-        mat_name.attrs['Tuple Axis Dimensions'] = np.string_('x=2')
+        mat_name.attrs['ObjectType'] = np.bytes_('StringDataArray')
+        mat_name.attrs['Tuple Axis Dimensions'] = np.bytes_('x=2')
         mat_name.attrs['TupleDimensions'] = np.uint64(2)
         # feature data
         fd = m.create_group('FeatureData')
@@ -4798,14 +4806,14 @@ class Microstructure(SampleData):
         avg_euler = fd.create_dataset('AvgEulerAngles', data=Euler)
         avg_euler.attrs['ComponentDimensions'] = np.uint64(3)
         avg_euler.attrs['DataArrayVersion'] = np.int32(2)
-        avg_euler.attrs['ObjectType'] = np.string_('DataArray<float>')
-        avg_euler.attrs['Tuple Axis Dimensions'] = np.string_('x=%d' %
+        avg_euler.attrs['ObjectType'] = np.bytes_('DataArray<float>')
+        avg_euler.attrs['Tuple Axis Dimensions'] = np.bytes_('x=%d' %
                                                               self.grains.nrows)
         avg_euler.attrs['TupleDimensions'] = np.uint64(self.grains.nrows)
         # geometry
         geom = m.create_group('_SIMPL_GEOMETRY')
         geom.attrs['GeometryType'] = np.uint32(999)
-        geom.attrs['GeometryTypeName'] = np.string_('UnknownGeometry')
+        geom.attrs['GeometryTypeName'] = np.bytes_('UnknownGeometry')
         # create the data container bundles group
         f.create_group('DataContainerBundles')
         f.close()
@@ -5165,7 +5173,7 @@ class Microstructure(SampleData):
                                 bb[2][0] + indices[2][0], :]
             # grain center
             grain_data_bin = (this_grain_map == gid).astype(np.uint8)
-            local_com = ndimage.measurements.center_of_mass(grain_data_bin) + \
+            local_com = ndimage.center_of_mass(grain_data_bin) + \
                         np.array([0.5, 0.5, 0.5])  # account for first voxel coordinates
             com = spacing * (np.array(bb)[:, 0] + local_com - 0.5 * np.array(grain_map.shape))
 
@@ -5987,4 +5995,3 @@ class Microstructure(SampleData):
             micro_resampled.recompute_grain_volumes()
             
         return micro_resampled
-

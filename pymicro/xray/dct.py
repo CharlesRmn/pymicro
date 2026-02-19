@@ -89,7 +89,7 @@ class Xrd3dForwardSimulation(ForwardSimulation):
         K_vectors = np.array(K_vectors)  # shape (n, 3)
         origins = np.array(origins)
         OR_vectors = detector.project_along_directions(K_vectors, origins)
-        uv = detector.lab_to_pixel(OR_vectors).astype(np.int)
+        uv = detector.lab_to_pixel(OR_vectors).astype(int)
         # look at which hkl plane diffracts on the detector within the given margin
         on_det = np.where((-margin < uv[:, 0]) &
                           (uv[:, 0] < detector.get_size_px()[0] + margin) &
@@ -168,7 +168,7 @@ class Xrd3dForwardSimulation(ForwardSimulation):
 
         # with diffraction informations, project them on the detector
         OR_vectors = detector.project_along_directions(K_vectors, origins)
-        uv = detector.lab_to_pixel(OR_vectors).astype(np.int)
+        uv = detector.lab_to_pixel(OR_vectors).astype(int)
 
         # now construct a boolean list to select the diffraction spots
         on_det = np.where((0 < uv[:, 0]) &
@@ -353,7 +353,9 @@ class DctForwardSimulation(ForwardSimulation):
         if data is None:
             grain_ids = self.exp.get_sample().get_grain_ids()
             print('binarizing grain %d' % gid)
-            data = np.where(grain_ids[ndimage.find_objects(grain_ids == gid)[0]] == gid, 1, 0)
+            # `find_objects` expects integer labels, not a boolean mask.
+            label_mask = (grain_ids == gid).astype(np.uint8)
+            data = np.where(grain_ids[ndimage.find_objects(label_mask)[0]] == gid, 1, 0)
         print('shape of binary grain is {}'.format(data.shape))
         stack_sim = radiographs(data, omegas)
         stack_sim = stack_sim.transpose(2, 0, 1)[:, ::-1, ::-1]
@@ -459,7 +461,7 @@ class DctForwardSimulation(ForwardSimulation):
             if np.sum(grain_data) < 1:
                 print('skipping grain %d' % gid)
                 continue
-            local_com = np.array(ndimage.measurements.center_of_mass(grain_data, grain_ids))
+            local_com = np.array(ndimage.center_of_mass(grain_data, grain_ids))
             print('local center of mass (voxel): {0}'.format(local_com))
             g_center_mm = detector.get_pixel_size() * (local_com - 0.5 * np.array(grain_ids.shape))
             print('center of mass (voxel): {0}'.format(local_com - 0.5 * np.array(grain_ids.shape)))
@@ -478,7 +480,9 @@ class DctForwardSimulation(ForwardSimulation):
                 print('diffraction vector:', K)
                 print('postion of the grain at omega=%.1f is ' % omega, g_pos_rot)
                 print('up=%d, vp=%d for plane (%d,%d,%d)' % (up, vp, h, k, l))
-            data_dif = grain_data[ndimage.find_objects(grain_ids == gid)[0]]
+            # `find_objects` expects integer labels, not a boolean mask.
+            label_mask = (grain_ids == gid).astype(np.uint8)
+            data_dif = grain_data[ndimage.find_objects(label_mask)[0]]
             proj_dif = radiograph(data_dif, omega)  # (Y, Z) coordinate system
             add_to_image(full_proj, proj_dif[:, ::-1], (up, vp), self.verbose)  # (u, v) axes correspond to (Y, -Z)
         return full_proj
@@ -999,4 +1003,3 @@ def tt_sim_rc(micro, gid, hkl_tt, T=None, lambda_keV=40.0, omega_step=4.0,
         progress = 100 * (1 + j) / len(omegas)
         print('simulating topotomography rocking curve: {0:.2f} %'.format(progress), end='\r')
     return omegas, base_tilt_values, rc_sim
-

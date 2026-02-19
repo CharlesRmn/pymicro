@@ -50,7 +50,7 @@ class FE_Calc():
         reading_cards = False
         for line in ut:
             if reading_cards:
-                time = numpy.float(line.split()[4])
+                time = float(line.split()[4])
                 print('reading card, time=', time)
                 self.avail_times.append(time)
             elif line.startswith('**meshfile'):
